@@ -62,7 +62,7 @@ THE SOFTWARE.
 
 struct FC_Font;
 
-typedef struct _TTF_Font TTF_Font;
+struct TTF_Font;
 
 // Differences between SDL_Renderer and SDL_gpu
 #ifdef NFONT_USE_SDL_GPU
