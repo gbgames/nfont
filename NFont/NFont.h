@@ -113,8 +113,10 @@ class NFONT_EXPORT NFont
         Rectf(float x, float y);
         Rectf(float x, float y, float w, float h);
         Rectf(const SDL_Rect& rect);
+		Rectf(const SDL_FRect& rect);
         
         SDL_Rect to_SDL_Rect() const;
+        SDL_FRect to_SDL_FRect() const;
         
         #ifdef NFONT_USE_SDL_GPU
         Rectf(const GPU_Rect& rect);
@@ -325,3 +327,4 @@ class NFONT_EXPORT NFont
 
 
 #endif // _NFONT_H__
+
