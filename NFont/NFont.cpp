@@ -60,18 +60,18 @@ static int c99_vsnprintf(char *outBuf, size_t size, const char *format, va_list 
 static inline SDL_Surface* createSurface24(Uint32 width, Uint32 height)
 {
     #if SDL_BYTEORDER == SDL_BIG_ENDIAN
-        return SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 24, 0xFF0000, 0x00FF00, 0x0000FF, 0);
+        return SDL_CreateSurface(width, height, SDL_GetPixelFormatForMasks(24, 0xFF0000, 0x00FF00, 0x0000FF, 0));
     #else
-        return SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 24, 0x0000FF, 0x00FF00, 0xFF0000, 0);
+        return SDL_CreateSurface(width, height, SDL_GetPixelFormatForMasks(24, 0x0000FF, 0x00FF00, 0xFF0000, 0));
     #endif
 }
 
 static inline SDL_Surface* createSurface32(Uint32 width, Uint32 height)
 {
     #if SDL_BYTEORDER == SDL_BIG_ENDIAN
-        return SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 32, 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+        return SDL_CreateSurface(width, height, SDL_GetPixelFormatForMasks(32, 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF));
     #else
-        return SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+        return SDL_CreateSurface(width, height, SDL_GetPixelFormatForMasks(32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000));
     #endif
 }
 
@@ -94,7 +94,7 @@ static inline Uint32 getPixel(SDL_Surface *Surface, int x, int y)
     if(x < 0 || x >= Surface->w)
         return 0;  // Best I could do for errors
 
-    bpp = Surface->format->BytesPerPixel;
+    bpp = SDL_BYTESPERPIXEL(Surface->format);
     bits = ((Uint8*)Surface->pixels) + y*Surface->pitch + x*bpp;
 
     switch (bpp)
@@ -105,13 +105,15 @@ static inline Uint32 getPixel(SDL_Surface *Surface, int x, int y)
         case 2:
             return *((Uint16*)Surface->pixels + y * Surface->pitch/2 + x);
             break;
-        case 3:
+        case 3: {
             // Endian-correct, but slower
             Uint8 r, g, b;
-            r = *((bits)+Surface->format->Rshift/8);
-            g = *((bits)+Surface->format->Gshift/8);
-            b = *((bits)+Surface->format->Bshift/8);
-            return SDL_MapRGB(Surface->format, r, g, b);
+			const SDL_PixelFormatDetails * formatDetails = SDL_GetPixelFormatDetails(Surface->format);
+			r = *((bits)+formatDetails->Rshift/8);
+			g = *((bits)+formatDetails->Gshift/8);
+			b = *((bits)+formatDetails->Bshift/8);
+            return SDL_MapRGB(formatDetails, 0, r, g, b);
+			}
             break;
         case 4:
             return *((Uint32*)Surface->pixels + y * Surface->pitch/4 + x);
@@ -123,7 +125,7 @@ static inline Uint32 getPixel(SDL_Surface *Surface, int x, int y)
 
 static inline void setPixel(SDL_Surface* surface, int x, int y, Uint32 color)
 {
-    int bpp = surface->format->BytesPerPixel;
+    int bpp = SDL_BYTESPERPIXEL(surface->format);
     Uint8* bits = ((Uint8 *)surface->pixels) + y*surface->pitch + x*bpp;
 
     /* Set the pixel */
@@ -137,12 +139,13 @@ static inline void setPixel(SDL_Surface* surface, int x, int y, Uint32 color)
             break;
         case 3: { /* Format/endian independent */
             Uint8 r,g,b;
-            r = (color >> surface->format->Rshift) & 0xFF;
-            g = (color >> surface->format->Gshift) & 0xFF;
-            b = (color >> surface->format->Bshift) & 0xFF;
-            *((bits)+surface->format->Rshift/8) = r;
-            *((bits)+surface->format->Gshift/8) = g;
-            *((bits)+surface->format->Bshift/8) = b;
+			const SDL_PixelFormatDetails * formatDetails = SDL_GetPixelFormatDetails(surface->format);
+            r = (color >> formatDetails->Rshift) & 0xFF;
+            g = (color >> formatDetails->Gshift) & 0xFF;
+            b = (color >> formatDetails->Bshift) & 0xFF;
+            *((bits)+formatDetails->Rshift/8) = r;
+            *((bits)+formatDetails->Gshift/8) = g;
+            *((bits)+formatDetails->Bshift/8) = b;
             }
             break;
         case 4:
@@ -153,34 +156,40 @@ static inline void setPixel(SDL_Surface* surface, int x, int y, Uint32 color)
 
 static inline void drawPixel(SDL_Surface *surface, Sint16 x, Sint16 y, Uint32 color, Uint8 alpha)
 {
-	if(x > surface->clip_rect.x + surface->clip_rect.w || x < surface->clip_rect.x || y > surface->clip_rect.y + surface->clip_rect.h || y < surface->clip_rect.y)
+	SDL_Rect clip_rect;
+	if (!SDL_GetSurfaceClipRect(surface, &clip_rect))
+		return;
+
+	if(x > clip_rect.x + clip_rect.w || x < clip_rect.x || y > clip_rect.y + clip_rect.h || y < clip_rect.y)
         return;
 
-    switch (surface->format->BytesPerPixel)
+	const SDL_PixelFormatDetails * formatDetails = SDL_GetPixelFormatDetails(surface->format);
+    switch (SDL_BYTESPERPIXEL(surface->format))
     {
         case 1: { /* Assuming 8-bpp */
 
                 Uint8 *pixel = (Uint8 *)surface->pixels + y*surface->pitch + x;
+				SDL_Palette * palette = SDL_GetSurfacePalette(surface);
 
-                Uint8 dR = surface->format->palette->colors[*pixel].r;
-                Uint8 dG = surface->format->palette->colors[*pixel].g;
-                Uint8 dB = surface->format->palette->colors[*pixel].b;
-                Uint8 sR = surface->format->palette->colors[color].r;
-                Uint8 sG = surface->format->palette->colors[color].g;
-                Uint8 sB = surface->format->palette->colors[color].b;
+                Uint8 dR = palette->colors[*pixel].r;
+                Uint8 dG = palette->colors[*pixel].g;
+                Uint8 dB = palette->colors[*pixel].b;
+                Uint8 sR = palette->colors[color].r;
+                Uint8 sG = palette->colors[color].g;
+                Uint8 sB = palette->colors[color].b;
 
                 dR = dR + ((sR-dR)*alpha >> 8);
                 dG = dG + ((sG-dG)*alpha >> 8);
                 dB = dB + ((sB-dB)*alpha >> 8);
 
-                *pixel = SDL_MapRGB(surface->format, dR, dG, dB);
+                *pixel = SDL_MapRGB(formatDetails, 0, dR, dG, dB);
 
         }
         break;
 
         case 2: { /* Probably 15-bpp or 16-bpp */
 
-                Uint32 Rmask = surface->format->Rmask, Gmask = surface->format->Gmask, Bmask = surface->format->Bmask, Amask = surface->format->Amask;
+                Uint32 Rmask = formatDetails->Rmask, Gmask = formatDetails->Gmask, Bmask = formatDetails->Bmask, Amask = formatDetails->Amask;
                 Uint16 *pixel = (Uint16 *)surface->pixels + y*surface->pitch/2 + x;
                 Uint32 dc = *pixel;
                 Uint32 R,G,B,A=0;
@@ -198,10 +207,10 @@ static inline void drawPixel(SDL_Surface *surface, Sint16 x, Sint16 y, Uint32 co
 
         case 3: { /* Slow 24-bpp mode, usually not used */
             Uint8 *pix = (Uint8 *)surface->pixels + y * surface->pitch + x*3;
-            Uint8 rshift8=surface->format->Rshift/8;
-            Uint8 gshift8=surface->format->Gshift/8;
-            Uint8 bshift8=surface->format->Bshift/8;
-            Uint8 ashift8=surface->format->Ashift/8;
+            Uint8 rshift8=formatDetails->Rshift/8;
+            Uint8 gshift8=formatDetails->Gshift/8;
+            Uint8 bshift8=formatDetails->Bshift/8;
+            Uint8 ashift8=formatDetails->Ashift/8;
 
 
 
@@ -215,10 +224,10 @@ static inline void drawPixel(SDL_Surface *surface, Sint16 x, Sint16 y, Uint32 co
                 dB = *((pix)+bshift8);
                 dA = *((pix)+ashift8);
 
-                sR = (color>>surface->format->Rshift)&0xff;
-                sG = (color>>surface->format->Gshift)&0xff;
-                sB = (color>>surface->format->Bshift)&0xff;
-                sA = (color>>surface->format->Ashift)&0xff;
+                sR = (color>>formatDetails->Rshift)&0xff;
+                sG = (color>>formatDetails->Gshift)&0xff;
+                sB = (color>>formatDetails->Bshift)&0xff;
+                sA = (color>>formatDetails->Ashift)&0xff;
 
                 dR = dR + ((sR-dR)*alpha >> 8);
                 dG = dG + ((sG-dG)*alpha >> 8);
@@ -234,7 +243,7 @@ static inline void drawPixel(SDL_Surface *surface, Sint16 x, Sint16 y, Uint32 co
         break;
 
         case 4: { /* Probably 32-bpp */
-            Uint32 Rmask = surface->format->Rmask, Gmask = surface->format->Gmask, Bmask = surface->format->Bmask, Amask = surface->format->Amask;
+            Uint32 Rmask = formatDetails->Rmask, Gmask = formatDetails->Gmask, Bmask = formatDetails->Bmask, Amask = formatDetails->Amask;
             Uint32* pixel = (Uint32*)surface->pixels + y*surface->pitch/4 + x;
             Uint32 source = *pixel;
             Uint32 R,G,B,A;
@@ -304,7 +313,7 @@ static inline NFont::Rectf rectIntersect(const NFont::Rectf& A, const NFont::Rec
 
 static inline SDL_Surface* copySurface(SDL_Surface *Surface)
 {
-    return SDL_ConvertSurface(Surface, Surface->format, Surface->flags);
+    return SDL_ConvertSurface(Surface, Surface->format);
 }
 
 
@@ -382,6 +391,10 @@ NFont::Rectf::Rectf(const SDL_Rect& rect)
     : x(rect.x), y(rect.y), w(rect.w), h(rect.h)
 {}
 
+NFont::Rectf::Rectf(const SDL_FRect& rect)
+    : x(rect.x), y(rect.y), w(rect.w), h(rect.h)
+{}
+
 #ifdef NFONT_USE_SDL_GPU
 NFont::Rectf::Rectf(const GPU_Rect& rect)
     : x(rect.x), y(rect.y), w(rect.w), h(rect.h)
@@ -443,7 +456,7 @@ NFont::NFont(const char* filename_ttf, Uint32 pointSize, const NFont::Color& col
     init();
     load(filename_ttf, pointSize, color, style);
 }
-NFont::NFont(SDL_RWops* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style)
+NFont::NFont(SDL_IOStream* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style)
 {
     init();
     load(file_rwops_ttf, own_rwops, pointSize, color, style);
@@ -471,7 +484,7 @@ NFont::NFont(NFont_Target* renderer, const char* filename_ttf, Uint32 pointSize,
     init();
     load(renderer, filename_ttf, pointSize, color, style);
 }
-NFont::NFont(NFont_Target* renderer, SDL_RWops* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style)
+NFont::NFont(NFont_Target* renderer, SDL_IOStream* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style)
 {
     init();
     load(renderer, file_rwops_ttf, own_rwops, pointSize, color, style);
@@ -572,9 +585,9 @@ bool NFont::load(NFont_Target* renderer, const char* filename_ttf, Uint32 pointS
 }
 
 #ifdef NFONT_USE_SDL_GPU
-bool NFont::load(SDL_RWops* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style)
+bool NFont::load(SDL_IOStream* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style)
 #else
-bool NFont::load(NFont_Target* renderer, SDL_RWops* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style)
+bool NFont::load(NFont_Target* renderer, SDL_IOStream* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style)
 #endif
 {
     FC_ClearFont(font);

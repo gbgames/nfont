@@ -33,7 +33,7 @@ THE SOFTWARE.
 #ifndef _NFONT_H__
 #define _NFONT_H__
 
-#include "SDL.h"
+#include "SDL3/SDL.h"
 
 #if defined(FC_USE_SDL_GPU) && !defined(NFONT_USE_SDL_GPU)
 #define NFONT_USE_SDL_GPU
@@ -62,7 +62,7 @@ THE SOFTWARE.
 
 struct FC_Font;
 
-typedef struct _TTF_Font TTF_Font;
+struct TTF_Font;
 
 // Differences between SDL_Renderer and SDL_gpu
 #ifdef NFONT_USE_SDL_GPU
@@ -113,6 +113,7 @@ class NFONT_EXPORT NFont
         Rectf(float x, float y);
         Rectf(float x, float y, float w, float h);
         Rectf(const SDL_Rect& rect);
+        Rectf(const SDL_FRect& rect);
         
         SDL_Rect to_SDL_Rect() const;
         
@@ -199,14 +200,14 @@ class NFONT_EXPORT NFont
     NFont(TTF_Font* ttf, const NFont::Color& color);
     NFont(const char* filename_ttf, Uint32 pointSize);
     NFont(const char* filename_ttf, Uint32 pointSize, const NFont::Color& color, int style = 0);
-    NFont(SDL_RWops* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style = 0);
+    NFont(SDL_IOStream* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style = 0);
     #else
     NFont(SDL_Renderer* renderer, SDL_Surface* src);
     NFont(SDL_Renderer* renderer, TTF_Font* ttf);
     NFont(SDL_Renderer* renderer, TTF_Font* ttf, const NFont::Color& color);
     NFont(SDL_Renderer* renderer, const char* filename_ttf, Uint32 pointSize);
     NFont(SDL_Renderer* renderer, const char* filename_ttf, Uint32 pointSize, const NFont::Color& color, int style = 0);
-    NFont(SDL_Renderer* renderer, SDL_RWops* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style = 0);
+    NFont(SDL_Renderer* renderer, SDL_IOStream* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style = 0);
     #endif
     
     ~NFont();
@@ -222,14 +223,14 @@ class NFONT_EXPORT NFont
     bool load(TTF_Font* ttf, const NFont::Color& color);
     bool load(const char* filename_ttf, Uint32 pointSize);
     bool load(const char* filename_ttf, Uint32 pointSize, const NFont::Color& color, int style = 0);
-    bool load(SDL_RWops* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style = 0);
+    bool load(SDL_IOStream* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style = 0);
     #else
     bool load(SDL_Renderer* renderer, SDL_Surface* FontSurface);
     bool load(SDL_Renderer* renderer, TTF_Font* ttf);
     bool load(SDL_Renderer* renderer, TTF_Font* ttf, const NFont::Color& color);
     bool load(SDL_Renderer* renderer, const char* filename_ttf, Uint32 pointSize);
     bool load(SDL_Renderer* renderer, const char* filename_ttf, Uint32 pointSize, const NFont::Color& color, int style = 0);
-    bool load(SDL_Renderer* renderer, SDL_RWops* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style = 0);
+    bool load(SDL_Renderer* renderer, SDL_IOStream* file_rwops_ttf, Uint8 own_rwops, Uint32 pointSize, const NFont::Color& color, int style = 0);
     #endif
     
     void free();
